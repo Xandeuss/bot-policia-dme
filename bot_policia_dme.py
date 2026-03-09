@@ -31,7 +31,7 @@ from datetime import datetime
 #   ⚙️  CONFIGURAÇÕES — EDITE AQUI
 # ══════════════════════════════════════════
 TOKEN    = os.getenv("TOKEN")
-GUILD_ID = 1480674787922808985
+GUILD_ID = int(os.getenv("GUILD_ID", "1480674787922808985"))
 
 # Nomes dos canais (devem existir no servidor)
 CANAL_BOAS_VINDAS   = "identificação"
@@ -89,6 +89,9 @@ async def on_ready():
     print(f"\n{'═'*50}")
     print(f"  🚔 BOT ONLINE: {bot.user}")
     print(f"  🏠 Servidor: {bot.get_guild(GUILD_ID)}")
+    print(f"  📦 Guilds conectadas: {[g.name for g in bot.guilds]}")
+    if not bot.get_guild(GUILD_ID):
+        print(f"  ⚠️ AVISO: Não encontrei o ID {GUILD_ID} na lista de guilds!")
     print(f"{'═'*50}\n")
     await bot.change_presence(
         activity=discord.Activity(
@@ -108,8 +111,12 @@ async def on_member_join(member):
     if cargo:
         await member.add_roles(cargo)
 
-    # 2. Enviar embed de boas-vindas
+    # Envia embed de boas-vindas
     canal = discord.utils.get(guild.text_channels, name=CANAL_BOAS_VINDAS)
+    if not canal:
+        # Busca flexível (ignora emojis/ícones se houver)
+        canal = next((c for c in guild.text_channels if CANAL_BOAS_VINDAS in c.name), None)
+    
     if canal:
         embed = discord.Embed(
             title="👮 NOVO RECRUTA DETECTADO!",
@@ -128,8 +135,11 @@ async def on_member_join(member):
         embed.add_field(name="📅 Entrou em", value=datetime.now().strftime("%d/%m/%Y %H:%M"), inline=True)
         await canal.send(embed=embed)
 
-    # 3. Log de entrada
+    # Log de entrada
     log = discord.utils.get(guild.text_channels, name=CANAL_LOG)
+    if not log:
+        log = next((c for c in guild.text_channels if "auditoria" in c.name), None)
+    
     if log:
         embed_log = discord.Embed(
             title="📥 Membro Entrou",
@@ -147,6 +157,8 @@ async def on_member_join(member):
 async def on_member_remove(member):
     guild = member.guild
     log = discord.utils.get(guild.text_channels, name=CANAL_LOG)
+    if not log:
+        log = next((c for c in guild.text_channels if "auditoria" in c.name), None)
     if log:
         embed_log = discord.Embed(
             title="📤 Membro Saiu",
@@ -573,6 +585,9 @@ async def denunciar(ctx, acusado: discord.Member = None, *, motivo: str = None):
         return
 
     canal = discord.utils.get(ctx.guild.text_channels, name=CANAL_DENUNCIAS)
+    if not canal:
+        canal = next((c for c in ctx.guild.text_channels if "solicitar-cargos" in c.name), None)
+    
     if canal:
         embed = discord.Embed(
             title="🚨 NOVA DENÚNCIA",
