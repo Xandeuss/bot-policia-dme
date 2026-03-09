@@ -30,7 +30,7 @@ from datetime import datetime
 # ══════════════════════════════════════════
 #   ⚙️  CONFIGURAÇÕES — EDITE AQUI
 # ══════════════════════════════════════════
-TOKEN    = "COLE_SEU_TOKEN_AQUI"
+TOKEN    = os.getenv("TOKEN")
 GUILD_ID = 1480674787922808985
 
 # Nomes dos canais (devem existir no servidor)
@@ -692,8 +692,8 @@ async def atualizar_contador():
 
 # ══════════════════════════════════════════
 if __name__ == "__main__":
-    if TOKEN == "COLE_SEU_TOKEN_AQUI":
-        print("❌ ERRO: Cole seu TOKEN no script!")
+    if not TOKEN:
+        print("❌ ERRO: A variável de ambiente TOKEN não foi encontrada!")
     else:
         print("🚀 Iniciando Bot Polícia DME...")
         bot.run(TOKEN)
