@@ -85,17 +85,14 @@ def cor_policia():
 @bot.event
 async def on_ready():
     carregar_xp()
-    atualizar_contador.start()
-    print(f"\n{'═'*50}")
-    print(f"  🚔 BOT ONLINE: {bot.user}")
-    print(f"  🏠 Servidor: {bot.get_guild(GUILD_ID)}")
-    print(f"  📦 Guilds conectadas: {[g.name for g in bot.guilds]}")
-    if not bot.get_guild(GUILD_ID):
-        print(f"  ⚠️ AVISO: Não encontrei o ID {GUILD_ID} na lista de guilds!")
-    print(f"{'═'*50}\n")
-    
     # Registra a view do botão de identificação para ser persistente (funcionar após reiniciar)
     bot.add_view(BotaoVerificacao())
+    
+    # Inicia as tarefas automáticas
+    if not atualizar_contador.is_running():
+        atualizar_contador.start()
+    if not limpar_identificacao.is_running():
+        limpar_identificacao.start()
     
     await bot.change_presence(
         activity=discord.Activity(
@@ -698,7 +695,29 @@ async def ajuda(ctx):
 #   ⏰  TAREFAS AUTOMÁTICAS
 # ══════════════════════════════════════════
 
-@tasks.loop(minutes=5)
+@tasks.loop(hours=24)
+async def limpar_identificacao():
+    """Limpa o canal de identificação a cada 24h, mantendo apenas a mensagem do botão"""
+    guild = bot.get_guild(GUILD_ID)
+    if not guild:
+        return
+        
+    canal = discord.utils.get(guild.text_channels, name=CANAL_BOAS_VINDAS)
+    if not canal:
+        canal = next((c for c in guild.text_channels if CANAL_BOAS_VINDAS in c.name), None)
+        
+    if canal:
+        def check(m):
+            # NÃO apaga se for a mensagem do bot que contém o título de IDENTIFICAÇÃO
+            if m.author == bot.user and m.embeds and m.embeds[0].title == "🚔 IDENTIFICAÇÃO — POLÍCIA DME":
+                return False
+            return True
+
+        try:
+            deletadas = await canal.purge(limit=1000, check=check)
+            print(f"🧹 Auto-limpeza: {len(deletadas)} mensagens removidas em {canal.name}")
+        except Exception as e:
+            print(f"❌ Erro na auto-limpeza: {e}")
 async def atualizar_contador():
     """Atualiza canal com contador de membros"""
     guild = bot.get_guild(GUILD_ID)
