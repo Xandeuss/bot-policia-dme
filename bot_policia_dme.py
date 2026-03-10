@@ -93,6 +93,10 @@ async def on_ready():
     if not bot.get_guild(GUILD_ID):
         print(f"  ⚠️ AVISO: Não encontrei o ID {GUILD_ID} na lista de guilds!")
     print(f"{'═'*50}\n")
+    
+    # Registra a view do botão de identificação para ser persistente (funcionar após reiniciar)
+    bot.add_view(BotaoVerificacao())
+    
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
