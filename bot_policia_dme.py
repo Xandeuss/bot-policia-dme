@@ -875,6 +875,131 @@ class LobbyAdivinhe(discord.ui.View):
         self.stop()
 
 
+# --- Batalha Naval ---
+
+class BatalhaNavalButton(discord.ui.Button['BatalhaNaval']):
+    def __init__(self, x: int, y: int):
+        super().__init__(style=discord.ButtonStyle.secondary, label="\u200b", row=y)
+        self.x = x
+        self.y = y
+
+    async def callback(self, interaction: discord.Interaction):
+        assert self.view is not None
+        view = self.view
+        
+        # Validação de turno
+        if view.turno == 1 and interaction.user != view.p1:
+            return await interaction.response.send_message("Não é sua vez! Espere o P1.", ephemeral=True)
+        if view.turno == 2 and interaction.user != view.p2:
+            return await interaction.response.send_message("Não é sua vez! Espere o P2.", ephemeral=True)
+
+        target_board = view.board2 if view.turno == 1 else view.board1
+        attacks = view.p1_attacks if view.turno == 1 else view.p2_attacks
+        
+        pos = (self.x, self.y)
+        if pos in attacks:
+            return await interaction.response.send_message("Você já atirou aqui!", ephemeral=True)
+
+        attacks.add(pos)
+        hit = pos in target_board
+        
+        if hit:
+            self.style = discord.ButtonStyle.danger
+            self.label = "💥"
+            res_text = "FOGO! Você acertou um navio!"
+        else:
+            self.style = discord.ButtonStyle.primary
+            self.label = "🌊"
+            res_text = "ÁGUA... Você errou."
+
+        # Verifica vitória
+        hits_count = sum(1 for p in attacks if p in target_board)
+        if hits_count == 3:
+            winner = view.p1 if view.turno == 1 else view.p2
+            for child in view.children:
+                child.disabled = True
+            await interaction.response.edit_message(content=f"🏆 **{winner.mention} AFUNDOU TODOS OS NAVIOS E VENCEU!**", view=view)
+            view.stop()
+            return
+
+        # Muda turno
+        view.turno = 2 if view.turno == 1 else 1
+        proximo = view.p2 if view.turno == 2 else view.p1
+        
+        # Atualiza a view para o próximo jogador (esconde os tiros do anterior ou mantém?)
+        # Para ser justo no mesmo canal, os botões mostram o histórico de TODOS os tiros.
+        # Mas os botões clicados ficam desabilitados.
+        self.disabled = True
+        
+        await interaction.response.edit_message(content=f"🎮 **BATALHA NAVAL**\n{res_text}\n\nVez de: {proximo.mention}", view=view)
+
+class BatalhaNaval(discord.ui.View):
+    def __init__(self, p1: discord.Member, p2: discord.Member):
+        super().__init__(timeout=600)
+        self.p1 = p1
+        self.p2 = p2
+        self.turno = 1
+        self.p1_attacks = set()
+        self.p2_attacks = set()
+        
+        # Gera 3 navios aleatórios para cada (4x4)
+        import random
+        coords = [(x, y) for x in range(4) for y in range(4)]
+        self.board1 = set(random.sample(coords, 3))
+        self.board2 = set(random.sample(coords, 3))
+        
+        for y in range(4):
+            for x in range(4):
+                self.add_item(BatalhaNavalButton(x, y))
+
+class LobbyNaval(discord.ui.View):
+    def __init__(self, creator: discord.Member):
+        super().__init__(timeout=300)
+        self.players = [creator]
+        self.max_players = 2
+
+    def embed_lobby(self):
+        lista = "\n".join([f"⚓ {p.display_name}" for p in self.players])
+        embed = discord.Embed(
+            title="🎮 LOBBY: Batalha Naval (4x4)",
+            description=f"Aguardando oponente (1/{self.max_players})\n\n**Jogadores:**\n{lista}",
+            color=cor_policia()
+        )
+        return embed
+
+    @discord.ui.button(label="Entrar", style=discord.ButtonStyle.primary, emoji="➕")
+    async def entrar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user in self.players:
+            return await interaction.response.send_message("Você já está no lobby!", ephemeral=True)
+        self.players.append(interaction.user)
+        await interaction.response.edit_message(embed=self.embed_lobby(), view=self)
+
+    @discord.ui.button(label="Sair", style=discord.ButtonStyle.secondary, emoji="➖")
+    async def sair(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user not in self.players:
+            return await interaction.response.send_message("Você não está aqui!", ephemeral=True)
+        self.players.remove(interaction.user)
+        if not self.players:
+            await interaction.response.edit_message(content="❌ Lobby fechado.", embed=None, view=None)
+            self.stop()
+            return
+        await interaction.response.edit_message(embed=self.embed_lobby(), view=self)
+
+    @discord.ui.button(label="INICIAR GUERRA", style=discord.ButtonStyle.success, emoji="🚀")
+    async def iniciar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if len(self.players) < 2:
+            return await interaction.response.send_message("Aguarde um oponente!", ephemeral=True)
+        
+        p1, p2 = self.players[0], self.players[1]
+        game = BatalhaNaval(p1, p2)
+        await interaction.response.edit_message(
+            content=f"⚓ **A GUERRA COMEÇOU!**\n{p1.mention} vs {p2.mention}\n\nVez de: {p1.mention}\n(Cada um tem 3 navios escondidos no grid 4x4)",
+            embed=None,
+            view=game
+        )
+        self.stop()
+
+
 # --- Menu de Jogos ---
 
 class MenuJogos(discord.ui.View):
@@ -894,6 +1019,11 @@ class MenuJogos(discord.ui.View):
     @discord.ui.button(label="🔢 Adivinhe o Número", style=discord.ButtonStyle.secondary, custom_id="jogos_adivinhe")
     async def adivinhe_numero(self, interaction: discord.Interaction, button: discord.ui.Button):
         lobby = LobbyAdivinhe(interaction.user)
+        await interaction.response.send_message(embed=lobby.embed_lobby(), view=lobby, ephemeral=False)
+
+    @discord.ui.button(label="⚓ Batalha Naval", style=discord.ButtonStyle.secondary, custom_id="jogos_naval")
+    async def batalha_naval(self, interaction: discord.Interaction, button: discord.ui.Button):
+        lobby = LobbyNaval(interaction.user)
         await interaction.response.send_message(embed=lobby.embed_lobby(), view=lobby, ephemeral=False)
 
 @bot.command(name="setupjogos")
