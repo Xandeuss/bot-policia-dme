@@ -34,16 +34,16 @@ TOKEN    = os.getenv("TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID", "1480674787922808985"))
 
 # Nomes dos canais (devem existir no servidor)
-CANAL_BOAS_VINDAS   = "identificação"
-CANAL_LOG           = "🔍・auditoria"
-CANAL_DENUNCIAS     = "solicitar-cargos"
-CANAL_REACTION      = "identificação"
+CANAL_BOAS_VINDAS   = "🏅・identificação"
+CANAL_LOG           = "🏅・auditoria"
+CANAL_DENUNCIAS     = "📢・solicitar-cargos"
+CANAL_REACTION      = "🏅・identificação"
 CANAL_MEMBROS_NOME  = "👮 Membros: {count}"  # nome do canal contador
 
 # Cargos automáticos
 CARGO_ENTRADA = "👤 Visitante"      # cargo dado ao entrar
 CARGO_VERIFICADO = "🪖 Militar"     # cargo dado após aprovação
-CARGO_ADMIN = "⚙️ Administrador"    # cargo com total autonomia
+CARGO_ADMIN = "Administrador"    # cargo com total autonomia
 
 # XP
 XP_POR_MENSAGEM = 10
