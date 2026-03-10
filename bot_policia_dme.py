@@ -379,22 +379,30 @@ class BotoesAprovacao(discord.ui.View):
             return
 
         cargos_dados = []
+        roles_para_adicionar = []
 
-        # Dá cargo de Militar
+        # Identifica cargo de Militar e Visitante
         cargo_v = discord.utils.get(guild.roles, name=CARGO_VERIFICADO)
         cargo_e = discord.utils.get(guild.roles, name=CARGO_ENTRADA)
-        if cargo_v:
-            await membro.add_roles(cargo_v)
-            cargos_dados.append(CARGO_VERIFICADO)
-        if cargo_e:
-            await membro.remove_roles(cargo_e)
 
-        # Dá todos os cargos selecionados
+        if cargo_v:
+            roles_para_adicionar.append(cargo_v)
+            cargos_dados.append(CARGO_VERIFICADO)
+        
+        # Identifica todos os cargos extras selecionados
         for nome_cargo in self.cargos:
             role = discord.utils.get(guild.roles, name=nome_cargo)
             if role:
-                await membro.add_roles(role)
+                roles_para_adicionar.append(role)
                 cargos_dados.append(nome_cargo)
+
+        # Adiciona todos os cargos de uma vez (mais estável)
+        if roles_para_adicionar:
+            await membro.add_roles(*roles_para_adicionar)
+
+        # Remove cargo de entrada
+        if cargo_e:
+            await membro.remove_roles(cargo_e)
 
         # Renomeia nick
         try:
