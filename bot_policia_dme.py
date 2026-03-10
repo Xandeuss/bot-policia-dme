@@ -35,7 +35,7 @@ GUILD_ID = int(os.getenv("GUILD_ID", "1480674787922808985"))
 
 # Nomes dos canais (devem existir no servidor)
 CANAL_BOAS_VINDAS   = "🏅・identificação"
-CANAL_LOG           = "🏅・auditoria"
+CANAL_LOG           = "👀・auditoria-de-identificação"
 CANAL_DENUNCIAS     = "📢・solicitar-cargos"
 CANAL_REACTION      = "🏅・identificação"
 CANAL_MEMBROS_NOME  = "👮 Membros: {count}"  # nome do canal contador
