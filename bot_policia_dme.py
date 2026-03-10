@@ -1262,7 +1262,7 @@ async def ajuda(ctx):
 #   ⏰  TAREFAS AUTOMÁTICAS
 # ══════════════════════════════════════════
 
-@tasks.loop(hours=24)
+@tasks.loop(minutes=10)
 async def limpar_identificacao():
     """Limpa o canal de identificação a cada 24h, mantendo apenas a mensagem do botão"""
     guild = bot.get_guild(GUILD_ID)
