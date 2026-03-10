@@ -770,6 +770,111 @@ class LobbyPPT(discord.ui.View):
         self.stop()
 
 
+# --- Adivinhe o Número ---
+
+class ChuteModal(discord.ui.Modal, title="Faça seu Chute!"):
+    chute = discord.ui.TextInput(label="Qual é o número? (1-100)", placeholder="Digite um número...", min_length=1, max_length=3)
+
+    def __init__(self, game_view):
+        super().__init__()
+        self.game_view = game_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            valor = int(self.chute.value)
+        except ValueError:
+            return await interaction.response.send_message("Isso não é um número válido!", ephemeral=True)
+
+        await self.game_view.process_guess(interaction, valor)
+
+class AdivinheJogo(discord.ui.View):
+    def __init__(self, players: list):
+        super().__init__(timeout=600)
+        self.players = players
+        import random
+        self.secret_number = random.randint(1, 100)
+        self.attempts = 0
+
+    @discord.ui.button(label="Enviar Chute", style=discord.ButtonStyle.primary, emoji="🔢")
+    async def chutar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user not in self.players:
+            return await interaction.response.send_message("Você não está nesta partida!", ephemeral=True)
+        await interaction.response.send_modal(ChuteModal(self))
+
+    async def process_guess(self, interaction: discord.Interaction, guess: int):
+        self.attempts += 1
+        
+        if guess == self.secret_number:
+            # Venceu!
+            global xp_data
+            uid = str(interaction.user.id)
+            if uid not in xp_data: xp_data[uid] = {"xp": 0, "level": 1}
+            xp_data[uid]["xp"] += 50
+            salvar_xp()
+
+            embed = discord.Embed(
+                title="🎉 TEMOS UM VENCEDOR!",
+                description=(
+                    f"**{interaction.user.mention}** acertou o número **{self.secret_number}**!\n"
+                    f"📉 Tentativas totais: {self.attempts}\n"
+                    f"🎁 Prêmio: **50 XP**"
+                ),
+                color=discord.Color.gold()
+            )
+            for child in self.children:
+                child.disabled = True
+            await interaction.response.edit_message(content="🎮 **FIM DE JOGO!**", embed=embed, view=None)
+            self.stop()
+        else:
+            dica = "MAIOR ⬆️" if self.secret_number > guess else "MENOR ⬇️"
+            await interaction.response.send_message(f"❌ O número {guess} está errado! É **{dica}**.", ephemeral=True)
+
+class LobbyAdivinhe(discord.ui.View):
+    def __init__(self, creator: discord.Member):
+        super().__init__(timeout=300)
+        self.players = [creator]
+        self.max_players = 10
+
+    def embed_lobby(self):
+        lista = "\n".join([f"👤 {p.display_name}" for p in self.players])
+        embed = discord.Embed(
+            title="🎮 LOBBY: Adivinhe o Número",
+            description=f"Aguardando jogadores (Mínimo 1, Máximo {self.max_players})\n\n**Jogadores:**\n{lista}",
+            color=cor_policia()
+        )
+        return embed
+
+    @discord.ui.button(label="Entrar", style=discord.ButtonStyle.primary, emoji="➕")
+    async def entrar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user in self.players:
+            return await interaction.response.send_message("Você já está no lobby!", ephemeral=True)
+        if len(self.players) >= self.max_players:
+            return await interaction.response.send_message("Lobby cheio!", ephemeral=True)
+        self.players.append(interaction.user)
+        await interaction.response.edit_message(embed=self.embed_lobby(), view=self)
+
+    @discord.ui.button(label="Sair", style=discord.ButtonStyle.secondary, emoji="➖")
+    async def sair(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user not in self.players:
+            return await interaction.response.send_message("Você não está aqui!", ephemeral=True)
+        self.players.remove(interaction.user)
+        if not self.players:
+            await interaction.response.edit_message(content="❌ Lobby fechado.", embed=None, view=None)
+            self.stop()
+            return
+        await interaction.response.edit_message(embed=self.embed_lobby(), view=self)
+
+    @discord.ui.button(label="INICIAR JOGO", style=discord.ButtonStyle.success, emoji="🚀")
+    async def iniciar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = AdivinheJogo(self.players)
+        await interaction.response.edit_message(
+            content="🎮 **O NÚMERO FOI ESCOLHIDO!**\nChute um valor de **1 a 100** clicando no botão abaixo.",
+            embed=None,
+            view=game
+        )
+        self.stop()
+
+
 # --- Menu de Jogos ---
 
 class MenuJogos(discord.ui.View):
@@ -784,6 +889,11 @@ class MenuJogos(discord.ui.View):
     @discord.ui.button(label="🪨📄 Pedra, Papel, Tesoura", style=discord.ButtonStyle.secondary, custom_id="jogos_ppt")
     async def pedra_papel_tesoura(self, interaction: discord.Interaction, button: discord.ui.Button):
         lobby = LobbyPPT(interaction.user)
+        await interaction.response.send_message(embed=lobby.embed_lobby(), view=lobby, ephemeral=False)
+
+    @discord.ui.button(label="🔢 Adivinhe o Número", style=discord.ButtonStyle.secondary, custom_id="jogos_adivinhe")
+    async def adivinhe_numero(self, interaction: discord.Interaction, button: discord.ui.Button):
+        lobby = LobbyAdivinhe(interaction.user)
         await interaction.response.send_message(embed=lobby.embed_lobby(), view=lobby, ephemeral=False)
 
 @bot.command(name="setupjogos")
