@@ -23,6 +23,7 @@
 import discord
 from discord.ext import commands, tasks
 import asyncio
+import aiohttp
 import json
 import os
 from datetime import datetime
@@ -75,7 +76,21 @@ def xp_para_level(level):
     return level * 100
 
 def cor_policia():
-    return discord.Color.from_rgb(26, 58, 107)  # Azul polícia
+    return discord.Color.from_rgb(0, 51, 102) # Azul Marinho Polícia
+
+async def get_habbo_data(nick: str):
+    """Busca dados detalhados do usuário na API do Habbo"""
+    url = f"https://www.habbo.com.br/api/public/users?name={nick}"
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                return None
+        except Exception as e:
+            print(f"Erro ao buscar Habbo API: {e}")
+            return None
 
 
 # ══════════════════════════════════════════
@@ -292,11 +307,21 @@ class FormularioDados(discord.ui.Modal, title="🚔 Identificação — Dados"):
         if cargo_v and cargo_v in interaction.user.roles:
             await interaction.response.send_message("⚠️ Você já está identificado!", ephemeral=True)
             return
+            
+        # Busca dados na API do Habbo
+        habbo_info = await get_habbo_data(self.nick_habbo.value)
+        if not habbo_info:
+            return await interaction.response.send_message(
+                f"❌ O Nickname **{self.nick_habbo.value}** não foi encontrado no Habbo BR!\n"
+                "Verifique se escreveu corretamente.", 
+                ephemeral=True
+            )
+
         # Gera link da foto automaticamente via API do Habbo
         foto_automatica = f"https://www.habbo.com.br/habbo-imaging/avatarimage?user={self.nick_habbo.value}&direction=4&head_direction=4&action=std&gesture=std&size=l"
         
         # Passa para o passo 2: seleção de cargos
-        view = SelecaoCargos(self.nick_habbo.value, foto_automatica)
+        view = SelecaoCargos(self.nick_habbo.value, foto_automatica, habbo_info)
         await interaction.response.send_message(
             "## 🎖️ Selecione os cargos que você faz parte:\n"
             "*(Selecione todos que se aplicam e clique em **Enviar**)*",
@@ -307,18 +332,20 @@ class FormularioDados(discord.ui.Modal, title="🚔 Identificação — Dados"):
 
 # ── Passo 2: Dropdown de seleção de cargos ─
 class SelecaoCargos(discord.ui.View):
-    def __init__(self, nick: str, foto: str):
+    def __init__(self, nick: str, foto: str, habbo_info: dict):
         super().__init__(timeout=300)
         self.nick = nick
         self.foto = foto
+        self.habbo_info = habbo_info
         self.cargos_selecionados = []
-        self.add_item(DropdownCargos(nick, foto))
+        self.add_item(DropdownCargos(nick, foto, habbo_info))
 
 
 class DropdownCargos(discord.ui.Select):
-    def __init__(self, nick: str, foto: str):
+    def __init__(self, nick: str, foto: str, habbo_info: dict):
         self.nick_salvo = nick
         self.foto_salva = foto
+        self.habbo_info = habbo_info
         options = [
             discord.SelectOption(label=label, value=valor)
             for label, valor in CARGOS_DISPONIVEIS
@@ -350,12 +377,29 @@ class DropdownCargos(discord.ui.Select):
                 color=discord.Color.orange(),
                 timestamp=datetime.utcnow()
             )
-            embed.add_field(name="🪪 Nick no Habbo", value=self.nick_salvo, inline=True)
+            
+            # Dados do Habbo pela API
+            missao = self.habbo_info.get('motto', 'Sem missão')
+            criado = self.habbo_info.get('memberSince', 'N/A').split('T')[0]
+            status = "🟢 Online" if self.habbo_info.get('online', False) else "🔴 Offline"
+            
+            embed.add_field(name="🪪 Nick no Habbo", value=f"[{self.nick_salvo}](https://www.habbo.com.br/profile/{self.nick_salvo})", inline=True)
+            embed.add_field(name="📜 Missão", value=missao, inline=True)
+            embed.add_field(name="📅 Criado em", value=criado, inline=True)
+            embed.add_field(name="🚦 Status", value=status, inline=True)
             embed.add_field(name="🎖️ Cargos solicitados", value="\n".join(nomes_cargos), inline=True)
-            embed.add_field(name="🖼️ Foto do perfil", value=self.foto_salva, inline=False)
+            
+            embed.set_thumbnail(url=self.foto_salva) # Foto pequena no canto
             embed.set_footer(text=f"ID: {membro.id}")
-            if self.foto_salva.startswith("http"):
-                embed.set_image(url=self.foto_salva)
+            
+            # Se a conta for muito recente (ex: menos de 30 dias), avisar
+            try:
+                data_criacao = datetime.strptime(criado, "%Y-%m-%d")
+                dias_conta = (datetime.now() - data_criacao).days
+                if dias_conta < 30:
+                    embed.add_field(name="⚠️ ATENÇÃO", value=f"Conta criada há apenas **{dias_conta} dias**!", inline=False)
+            except:
+                pass
 
             view = BotoesAprovacao(membro.id, self.nick_salvo, nomes_cargos)
             await canal_audit.send(embed=embed, view=view)
