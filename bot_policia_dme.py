@@ -85,8 +85,9 @@ def cor_policia():
 @bot.event
 async def on_ready():
     carregar_xp()
-    # Registra a view do botão de identificação para ser persistente (funcionar após reiniciar)
+    # Registra as views persistentes
     bot.add_view(BotaoVerificacao())
+    bot.add_view(MenuJogos())
     
     # Inicia as tarefas automáticas
     if not atualizar_contador.is_running():
