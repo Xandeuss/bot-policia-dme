@@ -644,6 +644,132 @@ class LobbyTTT(discord.ui.View):
         self.stop()
 
 
+# --- Pedra, Papel e Tesoura (PPT) ---
+
+class PPTGame(discord.ui.View):
+    def __init__(self, p1: discord.Member, p2: discord.Member):
+        super().__init__(timeout=300)
+        self.p1 = p1
+        self.p2 = p2
+        self.choices = {p1.id: None, p2.id: None}
+
+    def get_winner(self):
+        c1 = self.choices[self.p1.id]
+        c2 = self.choices[self.p2.id]
+        
+        if c1 == c2: return "Empate"
+        
+        wins = {
+            "pedra": "tesoura",
+            "papel": "pedra",
+            "tesoura": "papel"
+        }
+        
+        if wins[c1] == c2:
+            return self.p1
+        return self.p2
+
+    @discord.ui.button(label="Pedra", style=discord.ButtonStyle.secondary, emoji="🪨")
+    async def pedra(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_choice(interaction, "pedra")
+
+    @discord.ui.button(label="Papel", style=discord.ButtonStyle.secondary, emoji="📄")
+    async def papel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_choice(interaction, "papel")
+
+    @discord.ui.button(label="Tesoura", style=discord.ButtonStyle.secondary, emoji="✂️")
+    async def tesoura(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_choice(interaction, "tesoura")
+
+    async def process_choice(self, interaction: discord.Interaction, choice: str):
+        if interaction.user.id not in self.choices:
+            return await interaction.response.send_message("Você não está nesta partida!", ephemeral=True)
+        
+        if self.choices[interaction.user.id] is not None:
+            return await interaction.response.send_message("Você já fez sua jogada!", ephemeral=True)
+
+        self.choices[interaction.user.id] = choice
+        await interaction.response.send_message(f"Você escolheu {choice}!", ephemeral=True)
+
+        # Verifica se ambos jogaram
+        if all(self.choices.values()):
+            winner = self.get_winner()
+            c1 = self.choices[self.p1.id]
+            c2 = self.choices[self.p2.id]
+            
+            emojis = {"pedra": "🪨", "papel": "📄", "tesoura": "✂️"}
+            
+            msg = (
+                f"🎮 **RESULTADO: PEDRA, PAPEL E TESOURA**\n\n"
+                f"{self.p1.mention} jogou {emojis[c1]} **{c1.upper()}**\n"
+                f"{self.p2.mention} jogou {emojis[c2]} **{c2.upper()}**\n\n"
+            )
+            
+            if winner == "Empate":
+                msg += "🤝 **EMPATE!**"
+            else:
+                msg += f"🏆 **{winner.display_name} VENCEU!**"
+
+            for child in self.children:
+                child.disabled = True
+            
+            await interaction.message.edit(content=msg, view=None)
+            self.stop()
+
+class LobbyPPT(discord.ui.View):
+    def __init__(self, creator: discord.Member):
+        super().__init__(timeout=300)
+        self.players = [creator]
+        self.max_players = 2
+
+    def embed_lobby(self):
+        lista_players = "\n".join([f"🎮 {p.display_name}" for p in self.players])
+        embed = discord.Embed(
+            title="🎮 LOBBY: Pedra, Papel e Tesoura",
+            description=f"Aguardando jogadores ({len(self.players)}/{self.max_players})\n\n**Jogadores:**\n{lista_players}",
+            color=cor_policia()
+        )
+        return embed
+
+    @discord.ui.button(label="Entrar", style=discord.ButtonStyle.primary, emoji="➕")
+    async def entrar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user in self.players:
+            return await interaction.response.send_message("Você já está no lobby!", ephemeral=True)
+        
+        if len(self.players) >= self.max_players:
+            return await interaction.response.send_message("O lobby está cheio!", ephemeral=True)
+
+        self.players.append(interaction.user)
+        await interaction.response.edit_message(embed=self.embed_lobby(), view=self)
+
+    @discord.ui.button(label="Sair", style=discord.ButtonStyle.secondary, emoji="➖")
+    async def sair(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user not in self.players:
+            return await interaction.response.send_message("Você não está no lobby!", ephemeral=True)
+        
+        self.players.remove(interaction.user)
+        if not self.players:
+            await interaction.response.edit_message(content="❌ Lobby fechado.", embed=None, view=None)
+            self.stop()
+            return
+            
+        await interaction.response.edit_message(embed=self.embed_lobby(), view=self)
+
+    @discord.ui.button(label="INICIAR JOGO", style=discord.ButtonStyle.success, emoji="🚀")
+    async def iniciar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if len(self.players) < self.max_players:
+            return await interaction.response.send_message("Aguarde o segundo jogador!", ephemeral=True)
+        
+        p1, p2 = self.players[0], self.players[1]
+        view_game = PPTGame(p1, p2)
+        await interaction.response.edit_message(
+            content=f"🎮 **PEDRA, PAPEL E TESOURA INICIADO!**\n{p1.mention} vs {p2.mention}\n\n*Façam suas jogadas abaixo!*",
+            embed=None,
+            view=view_game
+        )
+        self.stop()
+
+
 # --- Menu de Jogos ---
 
 class MenuJogos(discord.ui.View):
@@ -653,6 +779,11 @@ class MenuJogos(discord.ui.View):
     @discord.ui.button(label="❌⭕ Jogo da Velha", style=discord.ButtonStyle.secondary, custom_id="jogos_ttt")
     async def jogo_da_velha(self, interaction: discord.Interaction, button: discord.ui.Button):
         lobby = LobbyTTT(interaction.user)
+        await interaction.response.send_message(embed=lobby.embed_lobby(), view=lobby, ephemeral=False)
+
+    @discord.ui.button(label="🪨📄 Pedra, Papel, Tesoura", style=discord.ButtonStyle.secondary, custom_id="jogos_ppt")
+    async def pedra_papel_tesoura(self, interaction: discord.Interaction, button: discord.ui.Button):
+        lobby = LobbyPPT(interaction.user)
         await interaction.response.send_message(embed=lobby.embed_lobby(), view=lobby, ephemeral=False)
 
 @bot.command(name="setupjogos")
