@@ -499,9 +499,14 @@ class TicTacToeButton(discord.ui.Button['TicTacToe']):
     async def callback(self, interaction: discord.Interaction):
         assert self.view is not None
         view = self.view
+
+        # Validação: Só permite que o jogador da vez clique
+        if view.current_player == view.X and interaction.user != view.player_x:
+            return await interaction.response.send_message("Não é sua vez! (Vez do X)", ephemeral=True)
+        if view.current_player == view.O and interaction.user != view.player_o:
+            return await interaction.response.send_message("Não é sua vez! (Vez do O)", ephemeral=True)
+
         state = view.board[self.y][self.x]
-        if state in (view.X, view.O):
-            return
 
         if view.current_player == view.X:
             self.style = discord.ButtonStyle.danger
