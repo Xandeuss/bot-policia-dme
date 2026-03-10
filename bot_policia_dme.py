@@ -484,6 +484,189 @@ class BotaoVerificacao(discord.ui.View):
         await interaction.response.send_modal(FormularioDados())
 
 
+# ══════════════════════════════════════════
+#   🕹️  SISTEMA DE JOGOS (BETA)
+# ══════════════════════════════════════════
+
+# --- Jogo da Velha (TicTacToe) ---
+
+class TicTacToeButton(discord.ui.Button['TicTacToe']):
+    def __init__(self, x: int, y: int):
+        super().__init__(style=discord.ButtonStyle.secondary, label='\u200b', row=y)
+        self.x = x
+        self.y = y
+
+    async def callback(self, interaction: discord.Interaction):
+        assert self.view is not None
+        view = self.view
+        state = view.board[self.y][self.x]
+        if state in (view.X, view.O):
+            return
+
+        if view.current_player == view.X:
+            self.style = discord.ButtonStyle.danger
+            self.label = 'X'
+            self.disabled = True
+            view.board[self.y][self.x] = view.X
+            view.current_player = view.O
+            content = f"Vez de: **{view.player_o.display_name}** (O)"
+        else:
+            self.style = discord.ButtonStyle.success
+            self.label = 'O'
+            self.disabled = True
+            view.board[self.y][self.x] = view.O
+            view.current_player = view.X
+            content = f"Vez de: **{view.player_x.display_name}** (X)"
+
+        winner = view.check_board_winner()
+        if winner is not None:
+            if winner == view.X:
+                content = f"🏆 **{view.player_x.display_name}** (X) VENCEU!"
+            elif winner == view.O:
+                content = f"🏆 **{view.player_o.display_name}** (O) VENCEU!"
+            else:
+                content = "🤝 **EMPATE!**"
+
+            for child in view.children:
+                child.disabled = True
+            view.stop()
+
+        await interaction.response.edit_message(content=content, view=view)
+
+
+class TicTacToe(discord.ui.View):
+    X = -1
+    O = 1
+    Tie = 2
+
+    def __init__(self, player_x: discord.Member, player_o: discord.Member):
+        super().__init__(timeout=600)
+        self.current_player = self.X
+        self.player_x = player_x
+        self.player_o = player_o
+        self.board = [
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+        ]
+
+        for x in range(3):
+            for y in range(3):
+                self.add_item(TicTacToeButton(x, y))
+
+    def check_board_winner(self):
+        for across in self.board:
+            value = sum(across)
+            if value == 3: return self.O
+            if value == -3: return self.X
+
+        for line in range(3):
+            value = self.board[0][line] + self.board[1][line] + self.board[2][line]
+            if value == 3: return self.O
+            if value == -3: return self.X
+
+        diag = self.board[0][0] + self.board[1][1] + self.board[2][2]
+        if diag == 3: return self.O
+        if diag == -3: return self.X
+
+        diag = self.board[0][2] + self.board[1][1] + self.board[2][0]
+        if diag == 3: return self.O
+        if diag == -3: return self.X
+
+        if all(all(row) for row in self.board):
+            return self.Tie
+
+        return None
+
+
+# --- Lobby do Jogo ---
+
+class LobbyTTT(discord.ui.View):
+    def __init__(self, creator: discord.Member):
+        super().__init__(timeout=300)
+        self.players = [creator]
+        self.max_players = 2
+
+    def embed_lobby(self):
+        lista_players = "\n".join([f"🎮 {p.display_name}" for p in self.players])
+        embed = discord.Embed(
+            title="🎮 LOBBY: Jogo da Velha",
+            description=f"Aguardando jogadores ({len(self.players)}/{self.max_players})\n\n**Jogadores:**\n{lista_players}",
+            color=cor_policia()
+        )
+        return embed
+
+    @discord.ui.button(label="Entrar", style=discord.ButtonStyle.primary, emoji="➕")
+    async def entrar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user in self.players:
+            return await interaction.response.send_message("Você já está no lobby!", ephemeral=True)
+        
+        if len(self.players) >= self.max_players:
+            return await interaction.response.send_message("O lobby está cheio!", ephemeral=True)
+
+        self.players.append(interaction.user)
+        await interaction.response.edit_message(embed=self.embed_lobby(), view=self)
+
+    @discord.ui.button(label="Sair", style=discord.ButtonStyle.secondary, emoji="➖")
+    async def sair(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user not in self.players:
+            return await interaction.response.send_message("Você não está no lobby!", ephemeral=True)
+        
+        self.players.remove(interaction.user)
+        if not self.players:
+            await interaction.response.edit_message(content="❌ Lobby fechado por falta de jogadores.", embed=None, view=None)
+            self.stop()
+            return
+            
+        await interaction.response.edit_message(embed=self.embed_lobby(), view=self)
+
+    @discord.ui.button(label="INICIAR JOGO", style=discord.ButtonStyle.success, emoji="🚀")
+    async def iniciar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if len(self.players) < self.max_players:
+            return await interaction.response.send_message("Aguarde o segundo jogador entrar!", ephemeral=True)
+        
+        # Sorteia quem começa como X
+        import random
+        random.shuffle(self.players)
+        p1, p2 = self.players[0], self.players[1]
+        
+        view_game = TicTacToe(p1, p2)
+        await interaction.response.edit_message(
+            content=f"🎮 **JOGO DA VELHA INICIADO!**\n**X:** {p1.mention}\n**O:** {p2.mention}\n\nVez de: **{p1.display_name}** (X)",
+            embed=None,
+            view=view_game
+        )
+        self.stop()
+
+
+# --- Menu de Jogos ---
+
+class MenuJogos(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="❌⭕ Jogo da Velha", style=discord.ButtonStyle.secondary, custom_id="jogos_ttt")
+    async def jogo_da_velha(self, interaction: discord.Interaction, button: discord.ui.Button):
+        lobby = LobbyTTT(interaction.user)
+        await interaction.response.send_message(embed=lobby.embed_lobby(), view=lobby, ephemeral=False)
+
+@bot.command(name="setupjogos")
+@commands.has_permissions(administrator=True)
+async def setupjogos(ctx):
+    """Envia o menu de jogos no canal"""
+    embed = discord.Embed(
+        title="🕹️ ÁREA DE LAZER - POLÍCIA DME",
+        description=(
+            "Bem-vindo ao canal de jogos! Aqui você pode relaxar e se divertir com seus colegas de farda.\n\n"
+            "Escolha um jogo abaixo para criar um lobby:"
+        ),
+        color=cor_policia()
+    )
+    embed.set_footer(text="Aproveite com moderação! 🚔")
+    await ctx.send(embed=embed, view=MenuJogos())
+    await ctx.message.delete()
+
+
 @bot.command(name="setupverificacao")
 @commands.has_permissions(administrator=True)
 async def setupverificacao(ctx):
