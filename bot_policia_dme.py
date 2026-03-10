@@ -276,20 +276,18 @@ class FormularioDados(discord.ui.Modal, title="🚔 Identificação — Dados"):
         max_length=30
     )
 
-    link_foto = discord.ui.TextInput(
-        label="Link da foto do perfil no Habbo",
-        placeholder="https://www.habbo.com.br/habbo-imaging/avatarimage?user=SeuNick",
-        required=True,
-        max_length=300
-    )
+    # link_foto Removido para automação via API do Habbo
 
     async def on_submit(self, interaction: discord.Interaction):
         cargo_v = discord.utils.get(interaction.guild.roles, name=CARGO_VERIFICADO)
         if cargo_v and cargo_v in interaction.user.roles:
             await interaction.response.send_message("⚠️ Você já está identificado!", ephemeral=True)
             return
+        # Gera link da foto automaticamente via API do Habbo
+        foto_automatica = f"https://www.habbo.com.br/habbo-imaging/avatarimage?user={self.nick_habbo.value}&direction=4&head_direction=4&action=std&gesture=std&size=l"
+        
         # Passa para o passo 2: seleção de cargos
-        view = SelecaoCargos(self.nick_habbo.value, self.link_foto.value)
+        view = SelecaoCargos(self.nick_habbo.value, foto_automatica)
         await interaction.response.send_message(
             "## 🎖️ Selecione os cargos que você faz parte:\n"
             "*(Selecione todos que se aplicam e clique em **Enviar**)*",
