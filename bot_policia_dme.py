@@ -42,7 +42,7 @@ CANAL_MEMBROS_NOME  = "👮 Membros: {count}"  # nome do canal contador
 
 # Cargos automáticos
 CARGO_ENTRADA = "👤 Visitante"      # cargo dado ao entrar
-CARGO_VERIFICADO = "🪖 Militar"     # cargo dado após aprovação
+CARGO_VERIFICADO = "🇧🇷 Militares"     # cargo dado após aprovação
 CARGO_ADMIN = "Administrador"    # cargo com total autonomia
 
 # XP
